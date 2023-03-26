@@ -11,6 +11,10 @@ overflow-checks = false
 [features]
 simd = []
 
+[dependencies]
+rayon = "1.7.0"
+dashmap = { version = "5.4.0", features = ["rayon"] }
+
 # Doesn't seem to help much:
 # [profile.release]
 # lto = true
