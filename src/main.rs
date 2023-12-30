@@ -101,11 +101,7 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
     level.push(expr);
 }
 
-fn can_use_in_binary_expr (
-    er: &Expr,
-    el: &Expr,
-    n: usize,
-) -> bool {
+fn can_use_in_binary_expr(er: &Expr, el: &Expr, n: usize) -> bool {
     if er.is_literal() && el.is_literal() {
         return false;
     }
@@ -125,21 +121,21 @@ fn apply_binary_operator(
     n: usize,
     el: &Expr,
     er: &Expr,
-    op: BinaryOperator
+    op: BinaryOperator,
 ) {
-    if !op.can_apply_left(el) {
-        return;
-    }
-    if !op.can_apply_right(er) {
-        return;
-    }
     if !op.can_apply(el, er) {
         return;
     }
     if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
         save(
             cn,
-            Expr::bin(el.into(), er.into(), op.into(), el.var_mask | er.var_mask, output),
+            Expr::bin(
+                el.into(),
+                er.into(),
+                op.into(),
+                el.var_mask | er.var_mask,
+                output,
+            ),
             n,
             cache,
             hashset_cache,
@@ -156,10 +152,12 @@ fn find_binary_expressions_left(
     er: &Expr,
 ) {
     for op_len in 1..=3 {
-        if n < k + op_len + 1 { return; }
+        if n < k + op_len + 1 {
+            return;
+        }
         for el in &cache[n - k - op_len] {
             if !can_use_in_binary_expr(er, el, n) {
-                return;
+                continue;
             }
             for &op in BINARY_OPERATORS {
                 if op.length() != op_len {
@@ -180,15 +178,17 @@ fn find_binary_expressions_right(
     el: &Expr,
 ) {
     for op_len in 1..=3 {
-        if n < k + op_len + 1 { return; }
+        if n < k + op_len + 1 {
+            return;
+        }
         for er in &cache[n - k - op_len] {
             if !can_use_in_binary_expr(er, el, n) {
-                return;
+                continue;
             }
             for &op in BINARY_OPERATORS {
                 if op.length() != op_len {
                     continue;
-                }   
+                }
                 apply_binary_operator(cn, cache, hashset_cache, n, el, er, op);
             }
         }
