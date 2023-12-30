@@ -101,6 +101,23 @@ fn save(level: &mut CacheLevel, expr: Expr, n: usize, cache: &Cache, hashset_cac
     level.push(expr);
 }
 
+fn can_use_in_binary_expr (
+    er: &Expr,
+    el: &Expr,
+    n: usize,
+) -> bool {
+    if er.is_literal() && el.is_literal() {
+        return false;
+    }
+    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
+        return false;
+    }
+    if !can_use_required_vars(el.var_mask | er.var_mask, n) {
+        return false;
+    }
+    true
+}
+
 fn apply_binary_operator(
     cn: &mut CacheLevel,
     cache: &Cache,
@@ -108,28 +125,25 @@ fn apply_binary_operator(
     n: usize,
     el: &Expr,
     er: &Expr,
-    op: BinaryOperator,
+    op: BinaryOperator
 ) {
-    if er.is_literal() && el.is_literal() {
+    if !op.can_apply_left(el) {
         return;
     }
-    if !REUSE_VARS && (el.var_mask & er.var_mask != 0) {
+    if !op.can_apply_right(er) {
         return;
     }
-    let mask = el.var_mask | er.var_mask;
-    if !can_use_required_vars(mask, n) {
+    if !op.can_apply(el, er) {
         return;
     }
-    if op.can_apply(el, er) {
-        if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
-            save(
-                cn,
-                Expr::bin(el.into(), er.into(), op.into(), mask, output),
-                n,
-                cache,
-                hashset_cache,
-            );
-        }
+    if let Some(output) = op.vec_apply(el.output.clone(), &er.output) {
+        save(
+            cn,
+            Expr::bin(el.into(), er.into(), op.into(), el.var_mask | er.var_mask, output),
+            n,
+            cache,
+            hashset_cache,
+        );
     }
 }
 
@@ -141,16 +155,17 @@ fn find_binary_expressions_left(
     k: usize,
     er: &Expr,
 ) {
-    for &op in BINARY_OPERATORS {
-        if k + op.length() >= n {
-            continue;
-        }
-        if !op.can_apply_right(er) {
-            continue;
-        }
-        for el in &cache[n - k - op.length()] {
-            if op.can_apply_left(el) {
-                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op)
+    for op_len in 1..=3 {
+        if n < k + op_len + 1 { return; }
+        for el in &cache[n - k - op_len] {
+            if !can_use_in_binary_expr(er, el, n) {
+                return;
+            }
+            for &op in BINARY_OPERATORS {
+                if op.length() != op_len {
+                    continue;
+                }
+                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op);
             }
         }
     }
@@ -164,16 +179,17 @@ fn find_binary_expressions_right(
     k: usize,
     el: &Expr,
 ) {
-    for &op in BINARY_OPERATORS {
-        if k + op.length() >= n {
-            continue;
-        }
-        if !op.can_apply_left(el) {
-            continue;
-        }
-        for er in &cache[n - k - op.length()] {
-            if op.can_apply_right(er) {
-                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op)
+    for op_len in 1..=3 {
+        if n < k + op_len + 1 { return; }
+        for er in &cache[n - k - op_len] {
+            if !can_use_in_binary_expr(er, el, n) {
+                return;
+            }
+            for &op in BINARY_OPERATORS {
+                if op.length() != op_len {
+                    continue;
+                }   
+                apply_binary_operator(cn, cache, hashset_cache, n, el, er, op);
             }
         }
     }
